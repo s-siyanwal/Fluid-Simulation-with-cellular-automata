@@ -60,7 +60,7 @@ MaxDraw = 1.1
 def get_state(total_mass):
 
 	if (total_mass <= Max_mass):
-		return 1
+		return Max_mass
 	elif (total_mass < 2*Max_mass + Max_compress):
 		return (Max_mass*Max_mass + total_mass*Max_compress)/(Max_mass + Max_compress)
 	else:
@@ -69,6 +69,10 @@ def get_state(total_mass):
 # Devuelve las coordenadas del poligono entero a dibujar 
 def polygon(x, y):
 				#Poligono de cada celda para dibujar
+				# Las celdas interiores van de 1 a nxC/nyC, se desplazan una posicion
+				# para que ocupen toda la ventana (los bordes quedan fuera de pantalla)
+				x -= 1
+				y -= 1
 				poly = [ 	((x    ) * dimCW, y * dimCH),
 								((x + 1) * dimCW, y * dimCH),
 								((x + 1) * dimCW, ((y + 1) * dimCH)),
@@ -121,8 +125,13 @@ for y in range(0, nyC +2):
 	bloques[nxC + 1, y] = PISO
 
 
+# Reloj para limitar los FPS y no consumir 100% del CPU
+clock = pygame.time.Clock()
+pygame.display.set_caption("Simulacion de agua - Espacio: pausa")
+
 # Bucle en ejecucion
 while True:
+	clock.tick(60)
 	
 
 	# Registrar una llamada de teclado y raton
@@ -137,7 +146,14 @@ while True:
 	# Para registrar distintos eventos
 	for event in ev:
 		if event.type == pygame.KEYDOWN:
-			pauseExect = not pauseExect # Para poner pausa
+			if event.key == pygame.K_SPACE:
+				pauseExect = not pauseExect # Para poner pausa
+			elif event.key == pygame.K_c:
+				# Limpiar el agua y los pisos interiores
+				new_mass[:, :] = 0
+				bloques[1:nxC+1, 1:nyC+1] = AIRE
+			elif event.key == pygame.K_ESCAPE:
+				sys.exit(0)
 			
 		if event.type == pygame.QUIT:
 			sys.exit(0)
@@ -145,14 +161,16 @@ while True:
 	# Para colocar agua en un punto dado, eliminar o poner un piso
 	if sum(mouseClick) > 0:
 		posX, posY = pygame.mouse.get_pos()
-		celX, celY = int(np.floor(posX / dimCW)) , int(np.floor(posY/dimCH))
-		if( bloques[celX,celY] != PISO):
-			new_mass[celX,celY] += mouseClick[0]*5 # Para sumar agua en el punto especificado
+		# +1 por el borde; se restringe para no modificar nunca los bordes solidos
+		celX = constrain(int(np.floor(posX / dimCW)) + 1, 1, nxC)
+		celY = constrain(int(np.floor(posY / dimCH)) + 1, 1, nyC)
+		if( mouseClick[0] and bloques[celX,celY] != PISO):
+			new_mass[celX,celY] += 5 # Para sumar agua en el punto especificado
 		if( mouseClick[1]):
-			bloques[celX,celY] = not mouseClick[1] # Para poner aire con click de la rueda del raton
+			bloques[celX,celY] = AIRE # Para poner aire con click de la rueda del raton
 			new_mass[celX,celY] = 0 
 		if( mouseClick[2]):
-			bloques[celX,celY] = mouseClick[2] # Para poner bloques con el click derecho
+			bloques[celX,celY] = PISO # Para poner bloques con el click derecho
 			new_mass[celX,celY] = 0
 	
 
@@ -193,7 +211,7 @@ while True:
 					if (flow > Minflow):
 						flow *= flowspeed 
 
-					flow = constrain(flow, 0, remaining_mass)
+					flow = constrain(flow, 0, min(Maxspeed, remaining_mass))
 
 					new_mass[x, y] -= flow
 					new_mass[x, y+1] += flow
@@ -211,7 +229,7 @@ while True:
 					
 					if (flow > Minflow):
 						flow *= flowspeed 
-					flow = constrain(flow, 0, remaining_mass)
+					flow = constrain(flow, 0, min(Maxspeed, remaining_mass))
 
 					new_mass[x, y] -= flow
 					new_mass[x-1, y] += flow
@@ -228,7 +246,7 @@ while True:
 					
 					if (flow > Minflow):
 						flow *= flowspeed 
-					flow = constrain(flow, 0, remaining_mass)
+					flow = constrain(flow, 0, min(Maxspeed, remaining_mass))
 
 					new_mass[x, y] -= flow
 					new_mass[x+1, y] += flow
@@ -256,8 +274,8 @@ while True:
 	mass = np.copy(new_mass)
 		
 	# Actualizar los tags de agua y aire y pintar la respectiva celda
-	for x in range(1, nxC+2):
-		for y in range(1, nyC+2):
+	for x in range(1, nxC+1):
+		for y in range(1, nyC+1):
 			if (bloques[x, y] == PISO):
 				pygame.draw.polygon(screen, piso , polygon(x,y), 0)
 				continue
